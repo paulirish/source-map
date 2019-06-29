@@ -11,6 +11,22 @@ const IndexedSourceMapConsumer = require("../lib/source-map-consumer").IndexedSo
 const BasicSourceMapConsumer = require("../lib/source-map-consumer").BasicSourceMapConsumer;
 const SourceMapGenerator = require("../lib/source-map-generator").SourceMapGenerator;
 
+const fs = require('fs');
+const resolve = require('resolve');
+
+// In order to maintain consistent global scope across the files,
+// and share natives like Array, etc, We will eval things within our sandbox
+function requireval(path) {
+  const res = resolve.sync(path, {basedir: __dirname});
+  const filesrc = fs.readFileSync(res, 'utf8');
+  // eslint-disable-next-line no-eval
+  eval(filesrc + '\n\n//# sourceURL=' + path);
+}
+global.window = global.self = global.global = global;
+global.SDK = {};
+requireval('../cdt/SourceMap.js');
+
+
 exports["test that we can instantiate with a string or an object"] = async function(assert) {
   let map = await new SourceMapConsumer(util.testMap);
   map = await new SourceMapConsumer(JSON.stringify(util.testMap));
