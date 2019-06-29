@@ -24,7 +24,11 @@ function requireval(path) {
 }
 global.window = global.self = global.global = global;
 global.SDK = {};
-requireval('../cdt/SourceMap.js');
+global.Common = {};
+requireval('../cdt/common/Object.js');
+requireval('../cdt/common/Console.js');
+requireval('../cdt/platform/utilities.js');
+requireval('../cdt/sdk/SourceMap.js');
 
 
 exports["test that we can instantiate with a string or an object"] = async function(assert) {
@@ -52,6 +56,8 @@ exports["test that an IndexedSourceMapConsumer is returned for sourcemaps with s
   map.destroy();
 };
 
+const domain = 'http://a.com';
+
 exports["test that the `sources` field has the original sources"] = async function(assert) {
   let map;
   let sources;
@@ -62,6 +68,18 @@ exports["test that the `sources` field has the original sources"] = async functi
   assert.equal(sources[1], "/the/root/two.js");
   assert.equal(sources.length, 2);
   map.destroy();
+
+  // const payload = /** @type {!SDK.SourceMapV3} */ (JSON.parse(content));
+  //       callback(new SDK.TextSourceMap(compiledURL, sourceMapURL, payload));
+
+  map = new SDK.TextSourceMap(`${domain}/compiled.js`, `${domain}/compiled.js.map`, util.testMap);
+  assert(map);
+  console.log(map);
+  sources = map.sourceURLs();
+  assert.equal(sources[0], `${domain}/the/root/one.js`);
+  assert.equal(sources[1], `${domain}/the/root/two.js`);
+  assert.equal(sources.length, 2);
+
 
   map = await new SourceMapConsumer(util.indexedTestMap);
   sources = map.sources;
