@@ -13,7 +13,7 @@ if (!console.profile) {
 // Ensure that benchmarks don't get optimized away by calling this blackbox
 // function in your benchmark's action.
 var __benchmarkResults = [];
-var benchmarkBlackbox = [].push.bind(__benchmarkResults);
+var benchmarkBlackbox = foo => __benchmarkResults.push(foo); // [].push.bind(__benchmarkResults);
 
 const now = typeof window === "object" && window.performance && window.performance.now
       ? () => window.performance.now()
@@ -138,6 +138,27 @@ var benchmarks = {
       }
     )
   },
+
+  "subsequent.setting.breakpoints CDT": () => {
+    let testMapping;
+    let smc;
+    return benchmark(
+      async function () {
+        testMapping = await getTestMapping();
+        smc = await new CDTSourceMapConsumer(testSourceMap);
+      },
+      async function () {
+        benchmarkBlackbox(smc.allGeneratedPositionsFor({
+          source: testMapping.source,
+          line: testMapping.originalLine,
+        }));
+      },
+      function () {
+        smc.destroy();
+      }
+    )
+  },
+
 
   "subsequent.pausing.at.exceptions": () => {
     let testMapping;

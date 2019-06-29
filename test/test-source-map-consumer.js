@@ -98,6 +98,14 @@ class CDTSourceMapConsumer {
       callback.call(context, ret);
     });
   }
+
+  allGeneratedPositionsFor({source, line, column}) {
+    return this._map.findReverseEntries(source, line - 1, column).map(entry => ({
+      line: entry.lineNumber + 1,
+      column: entry.columnNumber
+    }));
+  }
+
   destroy () {}
 };
 
@@ -401,7 +409,7 @@ exports["test eachMapping"] = async function(assert) {
 };
 
 exports["test eachMapping for indexed source maps"] = async function(assert) {
-  const map = await new CDTSourceMapConsumer(util.indexedTestMap);
+  const map = await new SourceMapConsumer(util.indexedTestMap);
   map.computeColumnSpans();
   let previousLine = -Infinity;
   let previousColumn = -Infinity;
@@ -898,28 +906,15 @@ exports["test allGeneratedPositionsFor for empty source map"] = async function(a
 };
 
 exports["test allGeneratedPositionsFor for column"] = async function(assert) {
-  let map = new SourceMapGenerator({
-    file: "generated.js"
-  });
-  map.addMapping({
-    original: { line: 1, column: 1 },
-    generated: { line: 1, column: 2 },
-    source: "foo.coffee"
-  });
-  map.addMapping({
-    original: { line: 1, column: 1 },
-    generated: { line: 1, column: 3 },
-    source: "foo.coffee"
-  });
-
-  map = await new SourceMapConsumer(map.toString());
+  const payload = {"version":3,"sources":["foo.coffee"],"names":[],"mappings":"EAAC,CAAA","file":"generated.js"};
+  map = await new CDTSourceMapConsumer(payload);
 
   const mappings = map.allGeneratedPositionsFor({
     line: 1,
     column: 1,
     source: "foo.coffee"
   });
-
+  console.log({mappings});
   assert.equal(mappings.length, 2);
   assert.equal(mappings[0].line, 1);
   assert.equal(mappings[0].column, 2);
