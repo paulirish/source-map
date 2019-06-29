@@ -28,8 +28,10 @@ async function run(tests) {
     }
   }
 
+  const hasFailures = total != passed;
+  const str = hasFailures ? '  ❌' : ' ✅'
   console.log("");
-  console.log(passed + " / " + total + " tests passed.");
+  console.log(passed + " / " + total + " tests passed." + str);
   console.log("");
 
   return total - passed;

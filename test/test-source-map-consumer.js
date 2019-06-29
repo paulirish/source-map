@@ -31,9 +31,81 @@ requireval('../cdt/platform/utilities.js');
 requireval('../cdt/sdk/SourceMap.js');
 
 
+const domain = 'http://a.com/';
+const strip = url => url.replace(domain, '');
+
+const assert = require("assert");
+
+// Mirror of sourcemapconsumer API but using the CDT impl
+class CDTSourceMapConsumer {
+  constructor(payload) {
+    if (typeof payload === 'string') {
+      if (payload.slice(0, 3) === ')]}')
+        payload = payload.substring(payload.indexOf('\n'));
+      payload = JSON.parse(payload);
+    }
+    this._map = new SDK.TextSourceMap(`compiled.js`, `compiled.js.map`, payload);
+    this._json = payload;
+    // console.log(this._map);
+    return Promise.resolve(this);
+  }
+  get sources() {
+    return this._map.sourceURLs();
+  }
+  get sourceRoot() {
+    return this._json.sourceRoot;
+  }
+  originalPositionFor({line, column, bias}) {
+    assert.equal(bias, null);
+    const lineNumber0 = line - 1;
+    // findEntry takes compiled locations and returns original locations.
+    const entry = this._map.findEntry(lineNumber0, column);
+    const res = {
+      source: entry.sourceURL,
+      line: entry.sourceLineNumber + 1,
+      column: entry.sourceColumnNumber,
+      name: entry.name
+    };
+    return res;
+  }
+  generatedPositionFor({source, line, column, bias}) {
+    assert.equal(bias, null);
+    const lineNumber0 = line - 1;
+    const entry = this._map.sourceLineMapping(source, lineNumber0, column);
+    const res = { // generated source
+      line: entry.lineNumber + 1,
+      column: entry.columnNumber,
+    };
+    return res;
+  }
+
+  /**
+   * @param {*} callback The function that is called with each mapping. Mappings have the form { source, generatedLine, generatedColumn, originalLine, originalColumn, name }
+   * @param {*} context Optional. If specified, this object will be the value of this every time that callback is called.
+   * @param {*} order Either SourceMapConsumer.GENERATED_ORDER or SourceMapConsumer.ORIGINAL_ORDER. Specifies whether you want to iterate over the mappings sorted by the generated file's line/column order or the original's source/line/column order, respectively. Defaults to SourceMapConsumer.GENERATED_ORDER.
+   */
+  eachMapping(callback, context, order) {
+    this._map.mappings().forEach(mapping => {
+      // TODO: change NaN's to nulls
+      const ret = {
+        generatedLine: mapping.lineNumber + 1,
+        generatedColumn: mapping.columnNumber,
+        source: mapping.sourceURL === undefined ? null : mapping.sourceURL,
+        originalLine: mapping.sourceLineNumber  + 1,
+        originalColumn: mapping.sourceColumnNumber,
+        name: mapping.name,
+      };
+      callback.call(context, ret);
+    });
+  }
+  destroy () {}
+};
+
+
+
 exports["test that we can instantiate with a string or an object"] = async function(assert) {
-  let map = await new SourceMapConsumer(util.testMap);
-  map = await new SourceMapConsumer(JSON.stringify(util.testMap));
+  let map = await new CDTSourceMapConsumer(util.testMap);
+  map = await new CDTSourceMapConsumer(JSON.stringify(util.testMap));
   assert.ok(true);
   map.destroy();
 };
@@ -56,53 +128,39 @@ exports["test that an IndexedSourceMapConsumer is returned for sourcemaps with s
   map.destroy();
 };
 
-const domain = 'http://a.com';
-
 exports["test that the `sources` field has the original sources"] = async function(assert) {
   let map;
   let sources;
 
-  map = await new SourceMapConsumer(util.testMap);
+  map = await new CDTSourceMapConsumer(util.testMap);
   sources = map.sources;
   assert.equal(sources[0], "/the/root/one.js");
   assert.equal(sources[1], "/the/root/two.js");
   assert.equal(sources.length, 2);
   map.destroy();
 
-  // const payload = /** @type {!SDK.SourceMapV3} */ (JSON.parse(content));
-  //       callback(new SDK.TextSourceMap(compiledURL, sourceMapURL, payload));
-
-  map = new SDK.TextSourceMap(`${domain}/compiled.js`, `${domain}/compiled.js.map`, util.testMap);
-  assert(map);
-  console.log(map);
-  sources = map.sourceURLs();
-  assert.equal(sources[0], `${domain}/the/root/one.js`);
-  assert.equal(sources[1], `${domain}/the/root/two.js`);
-  assert.equal(sources.length, 2);
-
-
-  map = await new SourceMapConsumer(util.indexedTestMap);
+  map = await new CDTSourceMapConsumer(util.indexedTestMap);
   sources = map.sources;
   assert.equal(sources[0], "/the/root/one.js");
   assert.equal(sources[1], "/the/root/two.js");
   assert.equal(sources.length, 2);
   map.destroy();
 
-  map = await new SourceMapConsumer(util.indexedTestMapDifferentSourceRoots);
+  map = await new CDTSourceMapConsumer(util.indexedTestMapDifferentSourceRoots);
   sources = map.sources;
   assert.equal(sources[0], "/the/root/one.js");
   assert.equal(sources[1], "/different/root/two.js");
   assert.equal(sources.length, 2);
   map.destroy();
 
-  map = await new SourceMapConsumer(util.testMapNoSourceRoot);
+  map = await new CDTSourceMapConsumer(util.testMapNoSourceRoot);
   sources = map.sources;
   assert.equal(sources[0], "one.js");
   assert.equal(sources[1], "two.js");
   assert.equal(sources.length, 2);
   map.destroy();
 
-  map = await new SourceMapConsumer(util.testMapEmptySourceRoot);
+  map = await new CDTSourceMapConsumer(util.testMapEmptySourceRoot);
   sources = map.sources;
   assert.equal(sources[0], "one.js");
   assert.equal(sources[1], "two.js");
@@ -114,7 +172,7 @@ exports["test that the source root is reflected in a mapping's source field"] = 
   let map;
   let mapping;
 
-  map = await new SourceMapConsumer(util.testMap);
+  map = await new CDTSourceMapConsumer(util.testMap);
 
   mapping = map.originalPositionFor({
     line: 2,
@@ -130,7 +188,7 @@ exports["test that the source root is reflected in a mapping's source field"] = 
   map.destroy();
 
 
-  map = await new SourceMapConsumer(util.testMapNoSourceRoot);
+  map = await new CDTSourceMapConsumer(util.testMapNoSourceRoot);
 
   mapping = map.originalPositionFor({
     line: 2,
@@ -146,7 +204,7 @@ exports["test that the source root is reflected in a mapping's source field"] = 
   map.destroy();
 
 
-  map = await new SourceMapConsumer(util.testMapEmptySourceRoot);
+  map = await new CDTSourceMapConsumer(util.testMapEmptySourceRoot);
 
   mapping = map.originalPositionFor({
     line: 2,
@@ -163,7 +221,11 @@ exports["test that the source root is reflected in a mapping's source field"] = 
 };
 
 exports["test mapping tokens back exactly"] = async function(assert) {
-  const map = await new SourceMapConsumer(util.testMap);
+  const map = await new CDTSourceMapConsumer(util.testMap);
+
+  // assertMapping(generatedLine, generatedColumn, originalSource,
+  //   originalLine, originalColumn, name, bias, map, assert,
+  //   dontTestGenerated, dontTestOriginal)
 
   util.assertMapping(1, 1, "/the/root/one.js", 1, 1, null, null, map, assert);
   util.assertMapping(1, 5, "/the/root/one.js", 1, 5, null, null, map, assert);
@@ -184,7 +246,7 @@ exports["test mapping tokens back exactly"] = async function(assert) {
 };
 
 exports["test mapping tokens back exactly in indexed source map"] = async function(assert) {
-  const map = await new SourceMapConsumer(util.indexedTestMap);
+  const map = await new CDTSourceMapConsumer(util.indexedTestMap);
 
   util.assertMapping(1, 1, "/the/root/one.js", 1, 1, null, null, map, assert);
   util.assertMapping(1, 5, "/the/root/one.js", 1, 5, null, null, map, assert);
@@ -204,6 +266,7 @@ exports["test mapping tokens back exactly in indexed source map"] = async functi
   map.destroy();
 };
 
+// skip
 exports["test mapping tokens fuzzy"] = async function(assert) {
   const map = await new SourceMapConsumer(util.testMap);
 
@@ -256,6 +319,7 @@ exports["test mapping tokens fuzzy in indexed source map"] = async function(asse
   map.destroy();
 };
 
+// dont suppoer addMapping
 exports["test mappings and end of lines"] = async function(assert) {
   const smg = new SourceMapGenerator({
     file: "foo.js"
@@ -291,7 +355,7 @@ exports["test mappings and end of lines"] = async function(assert) {
 };
 
 exports["test creating source map consumers with )]}' prefix"] = async function(assert) {
-  const map = await new SourceMapConsumer(")]}'\n" + JSON.stringify(util.testMap));
+  const map = await new CDTSourceMapConsumer(")]}'\n" + JSON.stringify(util.testMap));
   assert.ok(true);
   map.destroy();
 };
@@ -299,7 +363,7 @@ exports["test creating source map consumers with )]}' prefix"] = async function(
 exports["test eachMapping"] = async function(assert) {
   let map;
 
-  map = await new SourceMapConsumer(util.testMap);
+  map = await new CDTSourceMapConsumer(util.testMap);
   let previousLine = -Infinity;
   let previousColumn = -Infinity;
   map.eachMapping(function(mapping) {
@@ -317,19 +381,19 @@ exports["test eachMapping"] = async function(assert) {
   });
   map.destroy();
 
-  map = await new SourceMapConsumer(util.testMapNoSourceRoot);
+  map = await new CDTSourceMapConsumer(util.testMapNoSourceRoot);
   map.eachMapping(function(mapping) {
     assert.ok(mapping.source === "one.js" || mapping.source === "two.js");
   });
   map.destroy();
 
-  map = await new SourceMapConsumer(util.testMapEmptySourceRoot);
+  map = await new CDTSourceMapConsumer(util.testMapEmptySourceRoot);
   map.eachMapping(function(mapping) {
     assert.ok(mapping.source === "one.js" || mapping.source === "two.js");
   });
   map.destroy();
 
-  map = await new SourceMapConsumer(util.mapWithSourcelessMapping);
+  map = await new CDTSourceMapConsumer(util.mapWithSourcelessMapping);
   map.eachMapping(function(mapping) {
     assert.ok(mapping.source === null || (typeof mapping.originalColumn === "number" && typeof mapping.originalLine === "number"));
   });
@@ -337,7 +401,7 @@ exports["test eachMapping"] = async function(assert) {
 };
 
 exports["test eachMapping for indexed source maps"] = async function(assert) {
-  const map = await new SourceMapConsumer(util.indexedTestMap);
+  const map = await new CDTSourceMapConsumer(util.indexedTestMap);
   map.computeColumnSpans();
   let previousLine = -Infinity;
   let previousColumn = -Infinity;
