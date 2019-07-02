@@ -56,7 +56,7 @@ class CDTSourceMapConsumer {
     return this._json.sourceRoot;
   }
   originalPositionFor({line, column, bias}) {
-    assert.equal(bias, null);
+    // assert.equal(bias, null);
     const lineNumber0 = line - 1;
     // findEntry takes compiled locations and returns original locations.
     const entry = this._map.findEntry(lineNumber0, column);
@@ -69,7 +69,7 @@ class CDTSourceMapConsumer {
     return res;
   }
   generatedPositionFor({source, line, column, bias}) {
-    assert.equal(bias, null);
+    // assert.equal(bias, null);
     const lineNumber0 = line - 1;
     const entry = this._map.sourceLineMapping(source, lineNumber0, column);
     const res = { // generated source
@@ -88,12 +88,12 @@ class CDTSourceMapConsumer {
     this._map.mappings().forEach(mapping => {
       // TODO: change NaN's to nulls
       const ret = {
-        generatedLine: mapping.lineNumber + 1,
+        generatedLine: mapping.lineNumber === undefined ? null : mapping.lineNumber + 1,
         generatedColumn: mapping.columnNumber,
         source: mapping.sourceURL === undefined ? null : mapping.sourceURL,
-        originalLine: mapping.sourceLineNumber  + 1,
-        originalColumn: mapping.sourceColumnNumber,
-        name: mapping.name,
+        originalLine: mapping.sourceLineNumber === undefined ? null : mapping.sourceLineNumber + 1,
+        originalColumn: mapping.sourceColumnNumber === undefined ? null : mapping.sourceColumnNumber,
+        name: mapping.name === undefined ? null : mapping.name,
       };
       callback.call(context, ret);
     });
@@ -110,6 +110,51 @@ class CDTSourceMapConsumer {
 };
 
 
+exports["test that all mappings of all maps"] = async function(assert) {
+  const names = Object.keys(util)
+      .filter(key => key.includes('Map') && !key.startsWith('assert'))
+
+  for (const name of names) {
+    const json = util[name];
+    const mozMappings = [];
+    const cdtMappings = [];
+    let i = 0;
+    let mozTotal = 0;
+    let cdtTotal = 0;
+    const mozSM = await new SourceMapConsumer(json);
+    mozSM.eachMapping(map => {
+      mozMappings.push(map);
+      i++;
+    });
+    mozTotal = i;
+    i = 0;
+
+    const cdtSM = await new CDTSourceMapConsumer(json);
+    cdtSM.eachMapping(map => {
+      cdtMappings.push(map);
+      i++;
+    });
+    cdtTotal = i;
+
+    console.log('testing', name);
+    assert.equal(mozTotal, cdtTotal);
+    // console.log({mozMappings})
+    // console.log({cdtMappings})
+    mozMappings.forEach((mozMapping, i) => {
+      const altMozMapping = {
+        generatedColumn: mozMapping.generatedColumn,
+        generatedLine: mozMapping.generatedLine,
+        name: mozMapping.name,
+        originalColumn: mozMapping.originalColumn,
+        originalLine: mozMapping.originalLine,
+        source: mozMapping.source,
+      };
+      const cdtMapping = cdtMappings[i];
+
+      assert.deepStrictEqual(altMozMapping, cdtMapping);
+    });
+  }
+}
 
 exports["test that we can instantiate with a string or an object"] = async function(assert) {
   let map = await new CDTSourceMapConsumer(util.testMap);
@@ -914,7 +959,7 @@ exports["test allGeneratedPositionsFor for column"] = async function(assert) {
     column: 1,
     source: "foo.coffee"
   });
-  console.log({mappings});
+
   assert.equal(mappings.length, 2);
   assert.equal(mappings[0].line, 1);
   assert.equal(mappings[0].column, 2);
@@ -1590,6 +1635,7 @@ exports["test absolute sourceURL resolution with sourceMapURL"] = async function
   consumer.destroy();
 };
 
+// TODO: CDT doesn't throw on this.
 exports["test line numbers > 2**32"] = async function(assert) {
   const map = await new SourceMapConsumer({
     version: 3,
@@ -1611,6 +1657,7 @@ exports["test line numbers > 2**32"] = async function(assert) {
   map.destroy();
 };
 
+// TODO: CDT doesn't throw on this.
 exports["test line numbers < 0"] = async function(assert) {
   const map = await new SourceMapConsumer({
     version: 3,
