@@ -145,7 +145,7 @@ var benchmarks = {
     return benchmark(
       async function () {
         testMapping = await getTestMapping();
-        smc = await new CDTSourceMapConsumer(testSourceMap);
+        smc = await new sourceMap.CDTSourceMapConsumer(testSourceMap);
       },
       async function () {
         benchmarkBlackbox(smc.allGeneratedPositionsFor({
